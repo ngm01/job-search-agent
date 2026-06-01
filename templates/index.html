@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Job Pipeline</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg:       #0d0d0d;
+    --surface:  #141414;
+    --border:   #2a2a2a;
+    --muted:    #444;
+    --text:     #e8e8e8;
+    --subtext:  #888;
+    --pass:     #22c55e;
+    --fail:     #ef4444;
+    --warn:     #f59e0b;
+    --accent:   #3b82f6;
+    --strong:   #a78bfa;
+    --mono:     'IBM Plex Mono', monospace;
+    --sans:     'IBM Plex Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 100;
+  }
+
+  .logo {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--text);
+  }
+  .logo span { color: var(--accent); }
+
+  /* ── Stats bar ── */
+  #stats-bar {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .stat {
+    padding: 12px 28px;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .stat-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--subtext);
+    text-transform: uppercase;
+  }
+  .stat-value {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .stat-value.green { color: var(--pass); }
+  .stat-value.red   { color: var(--fail); }
+  .stat-value.blue  { color: var(--accent); }
+
+  /* ── Filter bar ── */
+  #filter-bar {
+    padding: 12px 32px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .filter-btn {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--subtext);
+    padding: 5px 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .filter-btn:hover { border-color: var(--muted); color: var(--text); }
+  .filter-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(59,130,246,0.08); }
+
+  /* ── Main table ── */
+  #main { padding: 0 32px 48px; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 16px;
+  }
+
+  thead th {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--subtext);
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  tbody tr:hover { background: var(--surface); }
+  tbody tr.expanded { background: var(--surface); }
+
+  td {
+    padding: 13px 12px;
+    vertical-align: middle;
+  }
+
+  .employer { font-weight: 500; color: var(--text); }
+  .job-title { color: var(--subtext); font-size: 12px; margin-top: 2px; }
+
+  .badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    padding: 3px 8px;
+    display: inline-block;
+  }
+  .badge.pass   { background: rgba(34,197,94,0.12);  color: var(--pass); }
+  .badge.fail   { background: rgba(239,68,68,0.12);  color: var(--fail); }
+  .badge.strong { background: rgba(167,139,250,0.12); color: var(--strong); }
+  .badge.mod    { background: rgba(245,158,11,0.12);  color: var(--warn); }
+  .badge.weak   { background: rgba(239,68,68,0.12);   color: var(--fail); }
+
+  .score-cell { font-family: var(--mono); font-weight: 600; }
+  .score-bar {
+    height: 3px;
+    background: var(--border);
+    margin-top: 4px;
+    width: 80px;
+  }
+  .score-fill {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.4s ease;
+  }
+  .score-fill.high  { background: var(--pass); }
+  .score-fill.med   { background: var(--warn); }
+  .score-fill.low   { background: var(--fail); }
+
+  .source-pill {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    padding: 2px 6px;
+    border: 1px solid var(--border);
+    color: var(--subtext);
+    text-transform: uppercase;
+  }
+
+  /* ── Expanded detail row ── */
+  .detail-row td {
+    padding: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .detail-panel {
+    padding: 24px 32px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 24px;
+    background: #101010;
+    animation: slideDown 0.15s ease;
+  }
+
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .detail-section h4 {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--subtext);
+    margin-bottom: 10px;
+  }
+
+  .score-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .score-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+  }
+  .score-row-label { color: var(--subtext); }
+  .score-row-val   { font-family: var(--mono); font-weight: 600; color: var(--text); }
+
+  .bullet-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .bullet-list li {
+    font-size: 12px;
+    color: var(--subtext);
+    padding-left: 12px;
+    position: relative;
+    line-height: 1.5;
+  }
+  .bullet-list li::before {
+    content: '›';
+    position: absolute;
+    left: 0;
+    color: var(--accent);
+  }
+  .bullet-list.green li::before { color: var(--pass); }
+  .bullet-list.red   li::before { color: var(--fail); }
+
+  .keyword-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+  }
+  .chip {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    color: var(--subtext);
+  }
+  .chip.missing { border-color: rgba(239,68,68,0.4); color: var(--fail); }
+
+  .doc-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .doc-btn {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    padding: 6px 14px;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text);
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: all 0.15s;
+  }
+  .doc-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .doc-btn:disabled { opacity: 0.45; cursor: not-allowed; border-color: var(--border); color: var(--subtext); }
+
+  .gen-btn {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    padding: 4px 10px;
+    background: none;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .gen-btn:hover { background: rgba(59,130,246,0.1); }
+  .gen-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .rescore-btn {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    padding: 2px 7px;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--subtext);
+    cursor: pointer;
+    margin-top: 5px;
+    display: block;
+    transition: all 0.15s;
+  }
+  .rescore-btn:hover { border-color: var(--warn); color: var(--warn); }
+  .rescore-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .applied-cell {
+    text-align: center;
+  }
+  .applied-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--subtext);
+    user-select: none;
+  }
+  .applied-label input[type="checkbox"] {
+    accent-color: var(--pass);
+    width: 13px;
+    height: 13px;
+    cursor: pointer;
+  }
+  .applied-label.checked { color: var(--pass); }
+
+  .ext-link {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--subtext);
+    text-decoration: none;
+  }
+  .ext-link:hover { color: var(--accent); }
+
+  /* ── Pipeline bar ── */
+  #pipeline-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    gap: 16px;
+  }
+
+  .run-btn {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    padding: 7px 18px;
+    background: rgba(59,130,246,0.1);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .run-btn:hover:not(:disabled) { background: rgba(59,130,246,0.2); }
+  .run-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .panel-toggle-btn {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    padding: 6px 14px;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--subtext);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .panel-toggle-btn:hover  { border-color: var(--muted); color: var(--text); }
+  .panel-toggle-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(59,130,246,0.08); }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner {
+    display: inline-block;
+    width: 11px; height: 11px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+    margin-right: 5px;
+  }
+
+  /* ── Collapsible panels ── */
+  .collapsible-panel {
+    border-bottom: 1px solid var(--border);
+    background: #0b0b0b;
+    padding: 20px 32px;
+    animation: slideDown 0.15s ease;
+  }
+
+  .panel-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--subtext);
+    margin-bottom: 12px;
+  }
+
+  /* queries panel */
+  #queries-textarea {
+    width: 100%;
+    height: 220px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 10px 12px;
+    resize: vertical;
+    outline: none;
+    line-height: 1.6;
+  }
+  #queries-textarea:focus { border-color: var(--muted); }
+
+  /* resumes panel */
+  .resume-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+  .resume-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .resume-item-name { color: var(--text); font-weight: 500; }
+  .resume-item-meta { color: var(--subtext); font-size: 10px; margin-left: 10px; }
+  .resume-item-actions { display: flex; gap: 6px; }
+
+  .add-resume-form {
+    border: 1px solid var(--border);
+    padding: 14px;
+    background: var(--surface);
+  }
+  .add-resume-form input[type="text"] {
+    width: 260px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 6px 10px;
+    outline: none;
+    margin-bottom: 8px;
+  }
+  .add-resume-form input[type="text"]:focus { border-color: var(--muted); }
+  .add-resume-form textarea {
+    width: 100%;
+    height: 180px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 8px 10px;
+    resize: vertical;
+    outline: none;
+    line-height: 1.5;
+    margin-bottom: 8px;
+  }
+  .add-resume-form textarea:focus { border-color: var(--muted); }
+
+  .panel-actions { display: flex; gap: 8px; margin-top: 10px; }
+
+  .btn-primary {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    padding: 6px 16px;
+    background: rgba(59,130,246,0.1);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-primary:hover { background: rgba(59,130,246,0.2); }
+
+  .btn-ghost {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    padding: 6px 14px;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--subtext);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-ghost:hover { border-color: var(--muted); color: var(--text); }
+
+  .btn-danger {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 3px 8px;
+    background: none;
+    border: 1px solid rgba(239,68,68,0.3);
+    color: var(--fail);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-danger:hover { background: rgba(239,68,68,0.1); }
+
+  .btn-edit {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 3px 8px;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--subtext);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-edit:hover { border-color: var(--muted); color: var(--text); }
+
+  /* ── Empty state ── */
+  #empty {
+    padding: 80px 32px;
+    text-align: center;
+    color: var(--subtext);
+    font-family: var(--mono);
+    font-size: 13px;
+    display: none;
+  }
+  #empty p { margin-top: 8px; font-size: 11px; }
+
+  /* ── Loading ── */
+  #loading {
+    padding: 60px;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--subtext);
+    letter-spacing: 0.08em;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">job<span>_</span>pipeline</div>
+  <div style="font-family:var(--mono);font-size:11px;color:var(--subtext)">
+    run: <code id="last-run">—</code>
+  </div>
+</header>
+
+<div id="stats-bar">
+  <div class="stat">
+    <span class="stat-label">Total</span>
+    <span class="stat-value blue" id="s-total">—</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Scraped</span>
+    <span class="stat-value" id="s-scraped">—</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Scored</span>
+    <span class="stat-value" id="s-scored">—</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Pass</span>
+    <span class="stat-value green" id="s-passed">—</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Fail</span>
+    <span class="stat-value red" id="s-failed">—</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Docs Generated</span>
+    <span class="stat-value" id="s-generated">—</span>
+  </div>
+</div>
+
+<div id="pipeline-bar">
+  <div style="display:flex;align-items:center;gap:14px">
+    <button class="run-btn" id="run-btn" onclick="runPipeline()">▶ Run Pipeline</button>
+    <div id="pipeline-status" style="display:none;flex-direction:column;gap:3px">
+      <div style="display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--subtext)">
+        <span class="spinner"></span>
+        <span id="pipeline-step">starting...</span>
+      </div>
+      <div id="pipeline-log" style="font-family:var(--mono);font-size:10px;color:var(--muted);padding-left:17px;max-width:600px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+    </div>
+    <div id="pipeline-result" style="font-family:var(--mono);font-size:11px"></div>
+  </div>
+  <div style="display:flex;gap:8px">
+    <button class="panel-toggle-btn" id="toggle-queries" onclick="togglePanel('queries')">Queries</button>
+    <button class="panel-toggle-btn" id="toggle-resumes" onclick="togglePanel('resumes')">Resumes</button>
+  </div>
+</div>
+
+<div id="queries-panel" class="collapsible-panel" style="display:none">
+  <div class="panel-title">Search Queries — one per line</div>
+  <textarea id="queries-textarea" spellcheck="false"></textarea>
+  <div class="panel-actions">
+    <button class="btn-primary" onclick="saveQueries()">Save</button>
+    <button class="btn-ghost" onclick="togglePanel('queries')">Close</button>
+    <span id="queries-save-msg" style="font-family:var(--mono);font-size:11px;color:var(--pass);margin-left:8px;display:none">saved</span>
+  </div>
+</div>
+
+<div id="resumes-panel" class="collapsible-panel" style="display:none">
+  <div class="panel-title">Source Resumes</div>
+  <div class="resume-list" id="resume-list">loading...</div>
+  <div class="add-resume-form" id="add-resume-form" style="display:none">
+    <div class="panel-title" style="margin-bottom:8px">Add / Edit Resume</div>
+    <div><input type="text" id="resume-name-input" placeholder="filename.md"></div>
+    <textarea id="resume-content-input" placeholder="Paste resume markdown here..."></textarea>
+    <div class="panel-actions">
+      <button class="btn-primary" onclick="saveResume()">Save Resume</button>
+      <button class="btn-ghost" onclick="closeAddResumeForm()">Cancel</button>
+    </div>
+  </div>
+  <button class="btn-ghost" style="margin-top:10px" onclick="openAddResumeForm()">+ Add Resume</button>
+</div>
+
+<div id="filter-bar">
+  <button class="filter-btn active" data-filter="all">All</button>
+  <button class="filter-btn" data-filter="PASS">Pass</button>
+  <button class="filter-btn" data-filter="FAIL">Fail</button>
+  <button class="filter-btn" data-filter="docs">Has Docs</button>
+  <button class="filter-btn" data-filter="applied">Applied</button>
+  <button class="filter-btn" data-filter="pass-unapplied">Pass — Unapplied</button>
+</div>
+
+<div id="main">
+  <div id="loading">loading results...</div>
+  <div id="empty">
+    <div>no results yet</div>
+    <p>run <code>python run.py</code> to start the pipeline</p>
+  </div>
+  <table id="results-table" style="display:none">
+    <thead>
+      <tr>
+        <th>Employer / Role</th>
+        <th>Score</th>
+        <th>Fit</th>
+        <th>Result</th>
+        <th>Action</th>
+        <th>Source</th>
+        <th>Docs</th>
+        <th>Applied</th>
+      </tr>
+    </thead>
+    <tbody id="results-body"></tbody>
+  </table>
+</div>
+
+<script>
+let allResults = [];
+let activeFilter = 'all';
+let expandedId = null;
+const _inFlight = { generate: new Set(), rescore: new Set() };
+
+function scoreClass(s) {
+  if (s === null || s === undefined) return '';
+  if (s >= 85) return 'high';
+  if (s >= 70) return 'med';
+  return 'low';
+}
+
+function fitBadge(fit) {
+  if (!fit) return '';
+  if (fit === 'Strong Fit') return `<span class="badge strong">Strong Fit</span>`;
+  if (fit === 'Moderate Fit') return `<span class="badge mod">Moderate Fit</span>`;
+  return `<span class="badge weak">Weak Fit</span>`;
+}
+
+function passBadge(pf) {
+  if (!pf) return '—';
+  return pf === 'PASS'
+    ? `<span class="badge pass">PASS</span>`
+    : `<span class="badge fail">FAIL</span>`;
+}
+
+function docsCell(r) {
+  if (r.pass_fail !== 'PASS') return '—';
+  if (r.has_docs) return '✓';
+  const busy = _inFlight.generate.has(r.id);
+  return `<button class="gen-btn" id="gen-btn-${r.id}"
+    onclick="event.stopPropagation(); triggerGenerate(event, ${r.id})"
+    ${busy ? 'disabled' : ''}>${busy ? 'generating...' : 'Generate'}</button>`;
+}
+
+function renderRow(r) {
+  const sc = r.composite_score;
+  const cls = scoreClass(sc);
+  const scoreDisplay = sc !== null && sc !== undefined ? sc.toFixed(1) : '—';
+  const pct = sc ? Math.min(100, sc) : 0;
+  const appliedChecked = r.applied ? 'checked' : '';
+  const appliedLabelCls = r.applied ? 'applied-label checked' : 'applied-label';
+  const rescoreBusy = _inFlight.rescore.has(r.id);
+
+  return `
+    <tr class="job-row" data-id="${r.id}" onclick="toggleDetail(${r.id})">
+      <td>
+        <div class="employer">${r.employer}</div>
+        <div class="job-title">${r.job_title}</div>
+        <a class="ext-link" href="${r.url}" target="_blank" onclick="event.stopPropagation()">↗ view posting</a>
+      </td>
+      <td>
+        <div class="score-cell">${scoreDisplay}</div>
+        <div class="score-bar"><div class="score-fill ${cls}" style="width:${pct}%"></div></div>
+        <button class="rescore-btn" id="rescore-btn-${r.id}"
+          onclick="event.stopPropagation(); triggerRescore(event, ${r.id})"
+          ${rescoreBusy ? 'disabled' : ''}>${rescoreBusy ? 'scoring...' : '↻ rescore'}</button>
+      </td>
+      <td>${fitBadge(r.fit_label)}</td>
+      <td>${passBadge(r.pass_fail)}</td>
+      <td style="font-size:12px;color:var(--subtext)">${r.recommended_action || '—'}</td>
+      <td><span class="source-pill">${r.source || '?'}</span></td>
+      <td>${docsCell(r)}</td>
+      <td class="applied-cell" onclick="event.stopPropagation()">
+        <label class="${appliedLabelCls}" id="applied-label-${r.id}">
+          <input type="checkbox" ${appliedChecked}
+            onchange="toggleApplied(${r.id}, this)">
+          applied
+        </label>
+      </td>
+    </tr>`;
+}
+
+function renderDetail(r) {
+  const scoreRows = [
+    ['Skills Coverage', r.skills_coverage_pct !== null ? r.skills_coverage_pct + '%' : '—'],
+    ['Experience', r.experience_score !== null ? r.experience_score : '—'],
+    ['Impact', r.impact_score !== null ? r.impact_score : '—'],
+    ['Communication', r.communication_score !== null ? r.communication_score : '—'],
+    ['Formatting', r.formatting_score !== null ? r.formatting_score : '—'],
+    ['Implied Level', r.experience_implied_level || '—'],
+  ].map(([label, val]) => `
+    <div class="score-row">
+      <span class="score-row-label">${label}</span>
+      <span class="score-row-val">${val}</span>
+    </div>`).join('');
+
+  const strengths = (r.strengths || []).map(s => `<li>${s}</li>`).join('');
+  const weaknesses = (r.weaknesses || []).map(s => `<li>${s}</li>`).join('');
+  const opts = (r.optimization_suggestions || []).map(s => `<li>${s}</li>`).join('');
+  const missing = (r.missing_keywords || []).map(k => `<span class="chip missing">${k}</span>`).join('');
+
+  const genBusy = _inFlight.generate.has(r.id);
+  const docLinks = r.has_docs ? `
+    <div class="doc-links">
+      <a class="doc-btn" href="/download/${r.id}/resume_pdf">Resume PDF</a>
+      <a class="doc-btn" href="/download/${r.id}/resume_md">Resume MD</a>
+      <a class="doc-btn" href="/download/${r.id}/cover_pdf">Cover PDF</a>
+      <a class="doc-btn" href="/download/${r.id}/cover_md">Cover MD</a>
+      <button class="doc-btn" id="regen-btn-${r.id}"
+        onclick="triggerGenerate(event, ${r.id})"
+        ${genBusy ? 'disabled' : ''}>${genBusy ? 'generating...' : '↻ Regen'}</button>
+    </div>` : `
+    <div style="margin-top:8px">
+      ${r.pass_fail === 'PASS'
+        ? `<button class="gen-btn" id="gen-btn-${r.id}"
+             onclick="triggerGenerate(event, ${r.id})"
+             ${genBusy ? 'disabled' : ''}>${genBusy ? 'generating...' : 'Generate'}</button>`
+        : `<span style="font-size:12px;color:var(--subtext)">N/A (did not pass)</span>`}
+    </div>`;
+
+  return `
+    <tr class="detail-row" data-detail-id="${r.id}">
+      <td colspan="8">
+        <div class="detail-panel">
+          <div class="detail-section">
+            <h4>Subscores</h4>
+            <div class="score-grid">${scoreRows}</div>
+            <h4 style="margin-top:16px">Missing Keywords</h4>
+            <div class="keyword-chips">${missing || '<span style="font-size:12px;color:var(--subtext)">None identified</span>'}</div>
+          </div>
+          <div class="detail-section">
+            <h4>Strengths</h4>
+            <ul class="bullet-list green">${strengths || '<li>—</li>'}</ul>
+            <h4 style="margin-top:16px">Weaknesses</h4>
+            <ul class="bullet-list red">${weaknesses || '<li>—</li>'}</ul>
+          </div>
+          <div class="detail-section">
+            <h4>Optimization Suggestions</h4>
+            <ul class="bullet-list">${opts || '<li>—</li>'}</ul>
+            <h4 style="margin-top:16px">Documents</h4>
+            ${docLinks}
+          </div>
+        </div>
+      </td>
+    </tr>`;
+}
+
+function toggleDetail(id) {
+  const tbody = document.getElementById('results-body');
+
+  // Close existing
+  if (expandedId !== null) {
+    const existingDetail = tbody.querySelector(`[data-detail-id="${expandedId}"]`);
+    const existingRow = tbody.querySelector(`.job-row[data-id="${expandedId}"]`);
+    if (existingDetail) existingDetail.remove();
+    if (existingRow) existingRow.classList.remove('expanded');
+    if (expandedId === id) { expandedId = null; return; }
+  }
+
+  expandedId = id;
+  const r = allResults.find(x => x.id === id);
+  if (!r) return;
+
+  const row = tbody.querySelector(`.job-row[data-id="${id}"]`);
+  if (!row) return;
+  row.classList.add('expanded');
+  row.insertAdjacentHTML('afterend', renderDetail(r));
+}
+
+async function triggerGenerate(e, jobId) {
+  e.stopPropagation();
+  if (_inFlight.generate.has(jobId)) return;
+  _inFlight.generate.add(jobId);
+  for (const id of [`gen-btn-${jobId}`, `regen-btn-${jobId}`]) {
+    const btn = document.getElementById(id);
+    if (btn) { btn.disabled = true; btn.textContent = 'generating...'; }
+  }
+
+  try {
+    const res = await fetch(`/api/generate/${jobId}`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'generation failed');
+  } catch (err) {
+    alert(`Generation failed: ${err.message}`);
+  } finally {
+    _inFlight.generate.delete(jobId);
+    await refresh();
+  }
+}
+
+async function triggerRescore(e, jobId) {
+  e.stopPropagation();
+  if (_inFlight.rescore.has(jobId)) return;
+  _inFlight.rescore.add(jobId);
+  const btn = document.getElementById(`rescore-btn-${jobId}`);
+  if (btn) { btn.disabled = true; btn.textContent = 'scoring...'; }
+
+  try {
+    const res = await fetch(`/api/rescore/${jobId}`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'rescore failed');
+    if (data.warning) alert(`⚠ ${data.warning}`);
+  } catch (err) {
+    alert(`Rescore failed: ${err.message}`);
+  } finally {
+    _inFlight.rescore.delete(jobId);
+    await refresh();
+  }
+}
+
+async function toggleApplied(jobId, checkbox) {
+  const label = document.getElementById(`applied-label-${jobId}`);
+  try {
+    const res = await fetch(`/api/applied/${jobId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ applied: checkbox.checked }),
+    });
+    if (!res.ok) throw new Error('failed to save');
+    if (label) label.className = checkbox.checked ? 'applied-label checked' : 'applied-label';
+    const row = allResults.find(r => r.id === jobId);
+    if (row) row.applied = checkbox.checked;
+  } catch (err) {
+    checkbox.checked = !checkbox.checked;
+    if (label) label.className = checkbox.checked ? 'applied-label checked' : 'applied-label';
+  }
+}
+
+function applyFilter(filter) {
+  activeFilter = filter;
+  expandedId = null;
+
+  document.querySelectorAll('.filter-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.filter === filter);
+  });
+
+  let filtered = allResults;
+  if (filter === 'PASS')    filtered = allResults.filter(r => r.pass_fail === 'PASS');
+  if (filter === 'FAIL')    filtered = allResults.filter(r => r.pass_fail === 'FAIL');
+  if (filter === 'docs')    filtered = allResults.filter(r => r.has_docs);
+  if (filter === 'applied')       filtered = allResults.filter(r => r.applied);
+  if (filter === 'pass-unapplied') filtered = allResults.filter(r => r.pass_fail === 'PASS' && !r.applied);
+
+  renderTable(filtered);
+}
+
+function renderTable(results) {
+  const tbody = document.getElementById('results-body');
+  tbody.innerHTML = results.map(renderRow).join('');
+
+  const table = document.getElementById('results-table');
+  const empty = document.getElementById('empty');
+  table.style.display = results.length ? 'table' : 'none';
+  empty.style.display  = results.length ? 'none'  : 'block';
+}
+
+async function loadStats() {
+  const s = await fetch('/api/stats').then(r => r.json());
+  document.getElementById('s-total').textContent     = s.total;
+  document.getElementById('s-scraped').textContent   = s.scraped;
+  document.getElementById('s-scored').textContent    = s.scored;
+  document.getElementById('s-passed').textContent    = s.passed;
+  document.getElementById('s-failed').textContent    = s.failed;
+  document.getElementById('s-generated').textContent = s.generated;
+}
+
+async function loadResults() {
+  document.getElementById('loading').style.display = 'block';
+  const results = await fetch('/api/results').then(r => r.json());
+  document.getElementById('loading').style.display = 'none';
+  allResults = results;
+  applyFilter(activeFilter);
+}
+
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => applyFilter(btn.dataset.filter));
+});
+
+// ── Pipeline ──────────────────────────────────────────────────────────────
+
+let _pollInterval = null;
+
+async function runPipeline() {
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  document.getElementById('pipeline-result').textContent = '';
+
+  const res = await fetch('/api/run', { method: 'POST' });
+  const data = await res.json();
+  if (!res.ok) {
+    btn.disabled = false;
+    document.getElementById('pipeline-result').style.color = 'var(--fail)';
+    document.getElementById('pipeline-result').textContent = data.error || 'failed to start';
+    return;
+  }
+
+  document.getElementById('pipeline-status').style.display = 'flex';
+  _pollInterval = setInterval(pollPipeline, 2000);
+}
+
+async function pollPipeline() {
+  const res  = await fetch('/api/run/status');
+  const data = await res.json();
+
+  const stepLabels = {
+    starting:  'starting...',
+    searching: 'searching for jobs...',
+    scraping:  'scraping job pages...',
+    scoring:   'scoring against resumes...',
+    done:      'done',
+    error:     'error',
+  };
+  document.getElementById('pipeline-step').textContent = stepLabels[data.step] || data.step;
+  if (data.last_log) document.getElementById('pipeline-log').textContent = data.last_log;
+
+  if (!data.running) {
+    clearInterval(_pollInterval);
+    _pollInterval = null;
+    document.getElementById('pipeline-status').style.display = 'none';
+    document.getElementById('run-btn').disabled = false;
+
+    const resultEl = document.getElementById('pipeline-result');
+    if (data.step === 'done') {
+      resultEl.style.color = 'var(--pass)';
+      resultEl.textContent = '✓ complete';
+      await refresh();
+      setTimeout(() => { resultEl.textContent = ''; }, 4000);
+    } else if (data.step === 'error') {
+      resultEl.style.color = 'var(--fail)';
+      resultEl.textContent = `✕ ${data.error || 'unknown error'}`;
+    }
+  }
+}
+
+// ── Panels ────────────────────────────────────────────────────────────────
+
+function togglePanel(name) {
+  const panel  = document.getElementById(`${name}-panel`);
+  const toggle = document.getElementById(`toggle-${name}`);
+  const open   = panel.style.display === 'none';
+  panel.style.display = open ? 'block' : 'none';
+  toggle.classList.toggle('active', open);
+  if (open) {
+    if (name === 'queries') loadQueriesPanel();
+    if (name === 'resumes') loadResumesPanel();
+  }
+}
+
+// ── Queries ───────────────────────────────────────────────────────────────
+
+async function loadQueriesPanel() {
+  const lines = await fetch('/api/queries').then(r => r.json());
+  document.getElementById('queries-textarea').value = lines.join('\n');
+}
+
+async function saveQueries() {
+  const raw   = document.getElementById('queries-textarea').value;
+  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+  const res   = await fetch('/api/queries', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ lines }),
+  });
+  if (res.ok) {
+    const msg = document.getElementById('queries-save-msg');
+    msg.style.display = 'inline';
+    setTimeout(() => { msg.style.display = 'none'; }, 2000);
+  }
+}
+
+// ── Resumes ───────────────────────────────────────────────────────────────
+
+async function loadResumesPanel() {
+  const files = await fetch('/api/resumes').then(r => r.json());
+  const list  = document.getElementById('resume-list');
+  if (!files.length) {
+    list.innerHTML = '<div style="font-family:var(--mono);font-size:12px;color:var(--subtext)">No resumes found.</div>';
+    return;
+  }
+  list.innerHTML = files.map(f => `
+    <div class="resume-item">
+      <span>
+        <span class="resume-item-name">${f.name}</span>
+        <span class="resume-item-meta">${(f.chars / 1000).toFixed(1)}k chars</span>
+      </span>
+      <div class="resume-item-actions">
+        <button class="btn-edit" onclick="editResume('${f.name}')">Edit</button>
+        <button class="btn-danger" onclick="deleteResume('${f.name}')">Delete</button>
+      </div>
+    </div>`).join('');
+}
+
+async function editResume(name) {
+  const data = await fetch(`/api/resumes/${encodeURIComponent(name)}`).then(r => r.json());
+  document.getElementById('resume-name-input').value   = data.name;
+  document.getElementById('resume-content-input').value = data.content;
+  document.getElementById('add-resume-form').style.display = 'block';
+  document.getElementById('resume-name-input').focus();
+}
+
+function openAddResumeForm() {
+  document.getElementById('resume-name-input').value    = '';
+  document.getElementById('resume-content-input').value = '';
+  document.getElementById('add-resume-form').style.display = 'block';
+  document.getElementById('resume-name-input').focus();
+}
+
+function closeAddResumeForm() {
+  document.getElementById('add-resume-form').style.display = 'none';
+}
+
+async function saveResume() {
+  let name    = document.getElementById('resume-name-input').value.trim();
+  const content = document.getElementById('resume-content-input').value;
+  if (!name || !content) { alert('Filename and content are required.'); return; }
+  if (!name.endsWith('.md')) name += '.md';
+
+  const res = await fetch(`/api/resumes/${encodeURIComponent(name)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content }),
+  });
+  if (res.ok) {
+    closeAddResumeForm();
+    loadResumesPanel();
+  } else {
+    alert('Failed to save resume.');
+  }
+}
+
+async function deleteResume(name) {
+  if (!confirm(`Delete ${name}?`)) return;
+  const res = await fetch(`/api/resumes/${encodeURIComponent(name)}`, { method: 'DELETE' });
+  if (res.ok) loadResumesPanel();
+}
+
+// ── Auto-refresh ──────────────────────────────────────────────────────────
+
+async function refresh() {
+  await Promise.all([loadStats(), loadResults()]);
+  document.getElementById('last-run').textContent = new Date().toLocaleTimeString();
+}
+
+refresh();
+setInterval(refresh, 30000);
+</script>
+</body>
+</html>

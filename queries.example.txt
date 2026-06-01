@@ -1,0 +1,30 @@
+# Search queries — one per line. Lines starting with # are ignored.
+# Copy this file to queries.txt and edit to match your target roles.
+# Supports: greenhouse.io, lever.co, jobs.ashbyhq.com
+
+# AI / LLM Engineering
+applied ai engineer site:greenhouse.io
+applied ai engineer site:lever.co
+ai product engineer site:greenhouse.io
+ai product engineer site:lever.co
+ai product engineer site:ashbyhq.com
+llm engineer site:greenhouse.io
+llm engineer site:lever.co
+
+# Generative AI — broader title variations
+generative ai engineer site:greenhouse.io
+generative ai engineer site:lever.co
+generative ai engineer site:ashbyhq.com
+ai application engineer site:greenhouse.io
+ai application engineer site:lever.co
+
+# Senior / Staff Full-Stack
+senior software engineer typescript site:greenhouse.io
+senior software engineer typescript site:lever.co
+full stack engineer typescript site:greenhouse.io
+full stack engineer typescript site:lever.co
+
+# Product Engineering
+product engineer site:greenhouse.io
+product engineer site:lever.co
+product engineer site:ashbyhq.com

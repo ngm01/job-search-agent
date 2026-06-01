@@ -1,0 +1,22 @@
+# Environment & secrets
+.env
+
+# Personal data — not committed
+resumes/
+queries.txt
+resume.md
+
+# Pipeline output (generated docs, DB, logs)
+output/
+data/
+logs/
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.Python
+
+# macOS
+.DS_Store
