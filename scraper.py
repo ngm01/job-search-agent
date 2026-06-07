@@ -10,6 +10,71 @@ from playwright.sync_api import sync_playwright, Page, TimeoutError as PWTimeout
 
 import db
 
+# ── Location filter ────────────────────────────────────────────────────────────
+# Explicit US indicators — if present the role is always kept.
+_US_RE = re.compile(
+    r'\b(?:'
+    r'united states|u\.s\.a\.?'
+    # State names (unambiguous)
+    r'|california|new york|texas|florida|illinois|washington\s+state'
+    r'|massachusetts|georgia|colorado|virginia|oregon|north carolina'
+    r'|pennsylvania|ohio|michigan|arizona|tennessee|minnesota|maryland'
+    r'|new jersey|nevada|utah|indiana|wisconsin|missouri|connecticut'
+    # Distinctive US cities
+    r'|san francisco|los angeles|new york city|nyc|chicago|seattle|boston'
+    r'|austin|denver|atlanta|miami|portland|san jose|dallas|houston|phoenix'
+    r'|silicon valley|bay area|nashville|philadelphia|san diego|minneapolis'
+    r')\b'
+    r'|remote\s*[-–(]\s*(?:u\.?s\.?|united states|north america)\b'
+    r'|\bauthorized to work in the (?:u\.?s\.?|united states)\b',
+    re.IGNORECASE,
+)
+
+# Non-US indicators — if present with no US indicator, the role is filtered.
+_NON_US_RE = re.compile(
+    r'\b(?:'
+    # Countries
+    r'united kingdom|u\.k\.|england|scotland|wales|northern ireland'
+    r'|germany|france|netherlands|sweden|norway|denmark|spain|italy'
+    r'|switzerland|austria|belgium|ireland|finland|portugal|poland'
+    r'|czech republic|romania|greece|hungary|ukraine'
+    r'|european union|europe only|eu only|emea only'
+    r'|canada|australia|new zealand'
+    r'|india|singapore|japan|south korea|hong kong|china|taiwan'
+    r'|brazil|argentina|mexico|colombia|chile'
+    r'|israel|uae|united arab emirates|south africa'
+    # UK cities (uncommon as US place names in tech JDs)
+    r'|london|manchester|birmingham|edinburgh|glasgow|leeds|liverpool|bristol'
+    # Major EU cities
+    r'|berlin|munich|münchen|hamburg|frankfurt|paris|amsterdam|stockholm'
+    r'|oslo|copenhagen|madrid|barcelona|rome|milan|zurich|zürich|vienna|wien'
+    r'|brussels|helsinki|lisbon|warsaw|prague'
+    # Canada cities
+    r'|toronto|vancouver|montreal|calgary|ottawa'
+    # Australia cities
+    r'|sydney|melbourne|brisbane|canberra|adelaide'
+    # India cities
+    r'|bangalore|bengaluru|mumbai|chennai|kolkata|hyderabad'
+    r'|pune|gurugram|noida'
+    # Asia cities
+    r'|tokyo|osaka|seoul|beijing|shanghai|shenzhen|taipei'
+    # LATAM cities
+    r'|são paulo|buenos aires|bogotá'
+    r'|tel aviv|dubai|abu dhabi'
+    r')\b'
+    r'|remote\s*[-–(,]\s*(?:uk|europe|eu|canada|australia|emea|apac|latam)\b',
+    re.IGNORECASE,
+)
+
+
+def _is_us_eligible(text: str) -> bool:
+    """Return False only when the role is clearly non-US with no US presence."""
+    if _US_RE.search(text):
+        return True           # explicit US signal always wins
+    if _NON_US_RE.search(text):
+        return False          # non-US with no offsetting US signal
+    return True               # no location info → don't over-filter
+
 log = logging.getLogger(__name__)
 
 # ── Per-board selectors ────────────────────────────────────────────────────────
@@ -116,6 +181,12 @@ def scrape_jobs():
                     raise ValueError(f"Body too short ({len(body)} chars)")
 
                 employer = _infer_employer(url, title)
+
+                if not _is_us_eligible(body):
+                    log.info(f"[scraper] [{job_id}] ✗ Not US-eligible: {employer} — {title}")
+                    with db.get_conn() as conn:
+                        db.mark_location_filtered(conn, job_id)
+                    continue
 
                 with db.get_conn() as conn:
                     db.update_job_scraped(conn, job_id, employer, title, body)

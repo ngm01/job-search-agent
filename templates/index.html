@@ -306,6 +306,23 @@
   .gen-btn:hover { background: rgba(59,130,246,0.1); }
   .gen-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
+  .delete-btn {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.04em;
+    padding: 2px 6px;
+    background: none;
+    border: 1px solid rgba(239,68,68,0.25);
+    color: rgba(239,68,68,0.45);
+    cursor: pointer;
+    margin-top: 6px;
+    display: block;
+    width: 100%;
+    transition: all 0.15s;
+  }
+  .delete-btn:hover { border-color: var(--fail); color: var(--fail); background: rgba(239,68,68,0.08); }
+  .delete-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
   .rescore-btn {
     font-family: var(--mono);
     font-size: 9px;
@@ -679,7 +696,7 @@
 let allResults = [];
 let activeFilter = 'all';
 let expandedId = null;
-const _inFlight = { generate: new Set(), rescore: new Set() };
+const _inFlight = { generate: new Set(), rescore: new Set(), delete: new Set() };
 
 function scoreClass(s) {
   if (s === null || s === undefined) return '';
@@ -745,6 +762,9 @@ function renderRow(r) {
             onchange="toggleApplied(${r.id}, this)">
           applied
         </label>
+        <button class="delete-btn" id="delete-btn-${r.id}"
+          onclick="triggerDelete(event, ${r.id})"
+          ${_inFlight.delete.has(r.id) ? 'disabled' : ''}>✕ delete</button>
       </td>
     </tr>`;
 }
@@ -874,6 +894,30 @@ async function triggerRescore(e, jobId) {
   } finally {
     _inFlight.rescore.delete(jobId);
     await refresh();
+  }
+}
+
+async function triggerDelete(e, jobId) {
+  e.stopPropagation();
+  if (!confirm('Remove this job from the pipeline? Any generated docs will also be deleted. This cannot be undone.')) return;
+  if (_inFlight.delete.has(jobId)) return;
+  _inFlight.delete.add(jobId);
+  const btn = document.getElementById(`delete-btn-${jobId}`);
+  if (btn) { btn.disabled = true; btn.textContent = 'deleting...'; }
+
+  try {
+    const res = await fetch(`/api/jobs/${jobId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'delete failed');
+    allResults = allResults.filter(r => r.id !== jobId);
+    if (expandedId === jobId) expandedId = null;
+    applyFilter(activeFilter);
+    loadStats();
+  } catch (err) {
+    alert(`Delete failed: ${err.message}`);
+    if (btn) { btn.disabled = false; btn.textContent = '✕ delete'; }
+  } finally {
+    _inFlight.delete.delete(jobId);
   }
 }
 

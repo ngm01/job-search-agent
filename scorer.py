@@ -49,7 +49,7 @@ Analyze the candidate's resume against the job description across all categories
 composite_score = (skills_match.coverage_pct * 0.40) + (experience_alignment.score * 0.25) + (impact_quantification.score * 0.20) + (communication_collaboration.score * 0.10) + (formatting_readability.score * 0.05)
 
 fit_label: "Strong Fit" if >= 85, "Moderate Fit" if >= 70, "Weak Fit" if < 70
-pass_fail: "PASS" if composite_score >= {threshold}, "FAIL" otherwise
+pass_fail: "PASS" if composite_score >= {threshold}, "FAIL" otherwise.
 
 === OUTPUT FORMAT ===
 Return ONLY a single valid JSON object:

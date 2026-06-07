@@ -343,6 +343,15 @@ def api_rescore(job_id: int):
     return jsonify(resp)
 
 
+@app.route("/api/jobs/<int:job_id>", methods=["DELETE"])
+def api_delete_job(job_id: int):
+    from generator import purge_job_docs
+    purge_job_docs(job_id)
+    with db.get_conn() as conn:
+        db.delete_job(conn, job_id)
+    return jsonify({"ok": True})
+
+
 @app.route("/api/applied/<int:job_id>", methods=["POST"])
 def api_applied(job_id: int):
     applied = request.json.get("applied", False)

@@ -119,6 +119,14 @@ def mark_scrape_failed(conn: sqlite3.Connection, job_id: int):
     conn.commit()
 
 
+def mark_location_filtered(conn: sqlite3.Connection, job_id: int):
+    conn.execute(
+        "UPDATE jobs SET scrape_status='location_filtered', scraped_at=datetime('now') WHERE id=?",
+        (job_id,)
+    )
+    conn.commit()
+
+
 def insert_score(conn: sqlite3.Connection, job_id: int, data: dict):
     """Store parsed score JSON into the scores table."""
     sm = data.get("skills_match", {})
@@ -164,6 +172,14 @@ def delete_score(conn: sqlite3.Connection, job_id: int):
     conn.commit()
 
 
+def delete_job(conn: sqlite3.Connection, job_id: int):
+    """Delete a job and all associated scores/doc records. Call purge_job_docs first to remove files."""
+    conn.execute("DELETE FROM generated_docs WHERE job_id=?", (job_id,))
+    conn.execute("DELETE FROM scores WHERE job_id=?", (job_id,))
+    conn.execute("DELETE FROM jobs WHERE id=?", (job_id,))
+    conn.commit()
+
+
 def mark_applied(conn: sqlite3.Connection, job_id: int, applied: bool):
     conn.execute("UPDATE jobs SET applied=? WHERE id=?", (int(applied), job_id))
     conn.commit()
@@ -194,6 +210,7 @@ def get_all_results(conn: sqlite3.Connection) -> list[sqlite3.Row]:
         FROM jobs j
         LEFT JOIN scores s ON s.job_id = j.id
         LEFT JOIN generated_docs d ON d.job_id = j.id
+        WHERE j.scrape_status != 'location_filtered'
         ORDER BY s.composite_score DESC NULLS LAST
     """).fetchall()
 
