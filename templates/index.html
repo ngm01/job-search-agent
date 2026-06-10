@@ -559,6 +559,71 @@
   }
   .btn-edit:hover { border-color: var(--muted); color: var(--text); }
 
+  /* ── Query Builder ── */
+  .qb-section { margin-bottom: 20px; }
+  .qb-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--subtext);
+    margin-bottom: 8px;
+  }
+  .qb-hint {
+    color: var(--muted);
+    font-size: 9px;
+    text-transform: none;
+    letter-spacing: 0;
+    font-family: var(--sans);
+  }
+  .qb-sites { display: flex; flex-wrap: wrap; gap: 6px; }
+  .qb-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .tag-input-row { display: flex; gap: 6px; margin-bottom: 8px; }
+  .tag-input {
+    flex: 1;
+    min-width: 0;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 5px 10px;
+    outline: none;
+  }
+  .tag-input:focus { border-color: var(--muted); }
+  .tag-list { display: flex; flex-wrap: wrap; gap: 6px; min-height: 26px; }
+  .qb-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 2px 6px 2px 8px;
+    border: 1px solid var(--border);
+    color: var(--text);
+    background: var(--surface);
+  }
+  .qb-tag.excl { border-color: rgba(239,68,68,0.35); color: var(--fail); }
+  .qb-tag.req  { border-color: rgba(59,130,246,0.35); color: var(--accent); }
+  .tag-rm {
+    background: none; border: none;
+    color: var(--muted); cursor: pointer;
+    font-size: 14px; padding: 0; line-height: 1;
+  }
+  .tag-rm:hover { color: var(--fail); }
+  .qb-preview {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 10px 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--subtext);
+    line-height: 1.9;
+    min-height: 42px;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
   /* ── Empty state ── */
   #empty {
     padding: 80px 32px;
@@ -636,10 +701,51 @@
 </div>
 
 <div id="queries-panel" class="collapsible-panel" style="display:none">
-  <div class="panel-title">Search Queries — one per line</div>
-  <textarea id="queries-textarea" spellcheck="false"></textarea>
+  <div class="panel-title">Query Builder</div>
+
+  <div class="qb-section">
+    <div class="qb-label">Job Boards</div>
+    <div class="qb-sites" id="qb-sites"></div>
+  </div>
+
+  <div class="qb-two-col">
+    <div class="qb-section">
+      <div class="qb-label">Job Titles <span class="qb-hint">— joined as OR group</span></div>
+      <div class="tag-input-row">
+        <input type="text" id="qb-titles-input" class="tag-input" placeholder="e.g. solutions engineer"
+          onkeydown="if(event.key==='Enter')addTag('titles')">
+        <button class="btn-ghost" onclick="addTag('titles')">Add</button>
+      </div>
+      <div class="tag-list" id="qb-titles-tags"></div>
+    </div>
+    <div class="qb-section">
+      <div class="qb-label">Required Keywords <span class="qb-hint">— any must appear</span></div>
+      <div class="tag-input-row">
+        <input type="text" id="qb-required-input" class="tag-input" placeholder="e.g. RAG, LLM, OpenAI"
+          onkeydown="if(event.key==='Enter')addTag('required')">
+        <button class="btn-ghost" onclick="addTag('required')">Add</button>
+      </div>
+      <div class="tag-list" id="qb-required-tags"></div>
+    </div>
+  </div>
+
+  <div class="qb-section">
+    <div class="qb-label">Excluded Keywords <span class="qb-hint">— removed from search results</span></div>
+    <div class="tag-input-row">
+      <input type="text" id="qb-excluded-input" class="tag-input" placeholder="e.g. senior, staff, clearance, java"
+        onkeydown="if(event.key==='Enter')addTag('excluded')">
+      <button class="btn-ghost" onclick="addTag('excluded')">Add</button>
+    </div>
+    <div class="tag-list" id="qb-excluded-tags"></div>
+  </div>
+
+  <div class="qb-section">
+    <div class="qb-label">Generated Queries <span id="qb-preview-count" class="qb-hint"></span></div>
+    <div id="qb-preview" class="qb-preview"></div>
+  </div>
+
   <div class="panel-actions">
-    <button class="btn-primary" onclick="saveQueries()">Save</button>
+    <button class="btn-primary" onclick="saveQueryConfig()">Save</button>
     <button class="btn-ghost" onclick="togglePanel('queries')">Close</button>
     <span id="queries-save-msg" style="font-family:var(--mono);font-size:11px;color:var(--pass);margin-left:8px;display:none">saved</span>
   </div>
@@ -1059,20 +1165,118 @@ function togglePanel(name) {
   }
 }
 
-// ── Queries ───────────────────────────────────────────────────────────────
+// ── Query Builder ────────────────────────────────────────────────────────
+
+const QB_SITES = [
+  { domain: 'job-boards.greenhouse.io', label: 'Greenhouse (job-boards)' },
+  { domain: 'boards.greenhouse.io',     label: 'Greenhouse (boards)' },
+  { domain: 'jobs.lever.co',            label: 'Lever' },
+  { domain: 'jobs.ashbyhq.com',         label: 'Ashby' },
+];
+
+let _qbConfig = {
+  sites: ['job-boards.greenhouse.io', 'jobs.lever.co', 'jobs.ashbyhq.com'],
+  job_titles: [],
+  required_keywords: [],
+  excluded_keywords: [],
+};
 
 async function loadQueriesPanel() {
-  const lines = await fetch('/api/queries').then(r => r.json());
-  document.getElementById('queries-textarea').value = lines.join('\n');
+  _qbConfig = await fetch('/api/query-config').then(r => r.json());
+  renderQueriesPanel();
 }
 
-async function saveQueries() {
-  const raw   = document.getElementById('queries-textarea').value;
-  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
-  const res   = await fetch('/api/queries', {
+function renderQueriesPanel() {
+  document.getElementById('qb-sites').innerHTML = QB_SITES.map(s => {
+    const on = _qbConfig.sites.includes(s.domain);
+    return `<button class="filter-btn ${on ? 'active' : ''}"
+      onclick="toggleSite('${s.domain}', this)">${s.label}</button>`;
+  }).join('');
+  renderTags('titles');
+  renderTags('required');
+  renderTags('excluded');
+  updatePreview();
+}
+
+function toggleSite(domain, btn) {
+  const i = _qbConfig.sites.indexOf(domain);
+  if (i >= 0) { _qbConfig.sites.splice(i, 1); btn.classList.remove('active'); }
+  else         { _qbConfig.sites.push(domain);  btn.classList.add('active');    }
+  updatePreview();
+}
+
+function _cfgKey(type) {
+  return type === 'titles' ? 'job_titles'
+       : type === 'required' ? 'required_keywords'
+       : 'excluded_keywords';
+}
+
+function addTag(type) {
+  const input = document.getElementById(`qb-${type}-input`);
+  const val = input.value.trim();
+  if (!val) return;
+  const arr = _qbConfig[_cfgKey(type)];
+  if (!arr.includes(val)) { arr.push(val); renderTags(type); updatePreview(); }
+  input.value = '';
+  input.focus();
+}
+
+function removeTag(type, idx) {
+  _qbConfig[_cfgKey(type)].splice(idx, 1);
+  renderTags(type);
+  updatePreview();
+}
+
+function renderTags(type) {
+  const arr = _qbConfig[_cfgKey(type)];
+  const cls = type === 'excluded' ? 'excl' : type === 'required' ? 'req' : '';
+  const prefix = type === 'excluded' ? '-' : '';
+  document.getElementById(`qb-${type}-tags`).innerHTML = arr.map((tag, i) =>
+    `<span class="qb-tag ${cls}">${prefix}${esc(tag)}<button class="tag-rm" onclick="removeTag('${type}',${i})">×</button></span>`
+  ).join('');
+}
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function _q(term) { return term.includes(' ') ? `"${term}"` : term; }
+
+function buildQueriesJs(cfg) {
+  const sites  = (cfg.sites || []).filter(Boolean);
+  const titles = (cfg.job_titles || []).filter(Boolean);
+  const reqKws = (cfg.required_keywords || []).filter(Boolean);
+  const exclKws = (cfg.excluded_keywords || []).filter(Boolean);
+  if (!sites.length || !titles.length) return [];
+  const titlesStr = `(${titles.map(_q).join(' OR ')})`;
+  const kwsStr    = reqKws.length ? `(${reqKws.map(_q).join(' OR ')})` : '';
+  const exclStr   = exclKws.map(k => `-${_q(k)}`).join(' ');
+  return sites.map(site => {
+    const parts = [`site:${site}`, titlesStr];
+    if (kwsStr)  parts.push(kwsStr);
+    if (exclStr) parts.push(exclStr);
+    return parts.join(' ');
+  });
+}
+
+function updatePreview() {
+  const queries = buildQueriesJs(_qbConfig);
+  const el = document.getElementById('qb-preview');
+  const ct = document.getElementById('qb-preview-count');
+  if (!queries.length) {
+    el.innerHTML = '<span style="color:var(--muted);font-style:italic">Select at least one site and add a job title to preview queries.</span>';
+    ct.textContent = '';
+    return;
+  }
+  ct.textContent = `— ${queries.length} quer${queries.length === 1 ? 'y' : 'ies'}`;
+  el.textContent = queries.join('\n');
+}
+
+async function saveQueryConfig() {
+  const res = await fetch('/api/query-config', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ lines }),
+    body: JSON.stringify(_qbConfig),
   });
   if (res.ok) {
     const msg = document.getElementById('queries-save-msg');

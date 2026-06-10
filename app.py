@@ -31,9 +31,17 @@ log = logging.getLogger(__name__)
 app = Flask(__name__)
 db.init_db()
 
-OUTPUT_DIR   = Path(__file__).parent / "output"
-RESUMES_DIR  = Path(__file__).parent / "resumes"
-QUERIES_FILE = Path(__file__).parent / "queries.txt"
+OUTPUT_DIR        = Path(__file__).parent / "output"
+RESUMES_DIR       = Path(__file__).parent / "resumes"
+QUERIES_FILE      = Path(__file__).parent / "queries.txt"
+QUERY_CONFIG_FILE = Path(__file__).parent / "query_config.json"
+
+_DEFAULT_QUERY_CONFIG: dict = {
+    "sites": ["job-boards.greenhouse.io", "jobs.lever.co", "jobs.ashbyhq.com"],
+    "job_titles": [],
+    "required_keywords": [],
+    "excluded_keywords": [],
+}
 
 # ── Pipeline background runner ──────────────────────────────────────────────
 
@@ -67,7 +75,46 @@ def _load_resumes() -> str:
     return "\n\n".join(parts)
 
 
+def _load_query_config() -> dict:
+    if QUERY_CONFIG_FILE.exists():
+        try:
+            return json.loads(QUERY_CONFIG_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return dict(_DEFAULT_QUERY_CONFIG)
+
+
+def _build_queries(config: dict) -> list[str]:
+    def _q(term: str) -> str:
+        return f'"{term}"' if " " in term else term
+
+    sites  = [s.strip() for s in config.get("sites", []) if s.strip()]
+    titles = [t.strip() for t in config.get("job_titles", []) if t.strip()]
+    req_kw = [k.strip() for k in config.get("required_keywords", []) if k.strip()]
+    exc_kw = [k.strip() for k in config.get("excluded_keywords", []) if k.strip()]
+
+    if not sites or not titles:
+        return []
+
+    titles_part = f"({' OR '.join(_q(t) for t in titles)})"
+    kws_part    = f"({' OR '.join(_q(k) for k in req_kw)})" if req_kw else ""
+    excl_part   = " ".join(f"-{_q(k)}" for k in exc_kw)
+
+    queries = []
+    for site in sites:
+        parts = [f"site:{site}", titles_part]
+        if kws_part:
+            parts.append(kws_part)
+        if excl_part:
+            parts.append(excl_part)
+        queries.append(" ".join(parts))
+    return queries
+
+
 def _load_query_lines() -> list[str]:
+    built = _build_queries(_load_query_config())
+    if built:
+        return built
     if not QUERIES_FILE.exists():
         return []
     lines = QUERIES_FILE.read_text(encoding="utf-8").splitlines()
@@ -250,6 +297,18 @@ def api_queries_post():
     )
     QUERIES_FILE.write_text(content, encoding="utf-8")
     return jsonify({"ok": True, "count": len([l for l in lines if l.strip()])})
+
+
+@app.route("/api/query-config", methods=["GET"])
+def api_query_config_get():
+    return jsonify(_load_query_config())
+
+
+@app.route("/api/query-config", methods=["POST"])
+def api_query_config_post():
+    config = request.json
+    QUERY_CONFIG_FILE.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    return jsonify({"ok": True})
 
 
 # ── Resumes ───────────────────────────────────────────────────────────────────

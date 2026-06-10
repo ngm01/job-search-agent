@@ -1,0 +1,16 @@
+{
+  "excluded_keywords": [
+    "India, senior, staff, master's"
+  ],
+  "job_titles": [
+    "solutions engineer, applied ai engineer, implementation engineer"
+  ],
+  "required_keywords": [
+    "RAG, LLM, prompt, Claude, OpenAI"
+  ],
+  "sites": [
+    "jobs.lever.co",
+    "job-boards.greenhouse.io",
+    "jobs.ashbyhq.com"
+  ]
+}
