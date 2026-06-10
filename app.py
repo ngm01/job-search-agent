@@ -121,7 +121,7 @@ def _load_query_lines() -> list[str]:
     return [l.strip() for l in lines if l.strip() and not l.strip().startswith("#")]
 
 
-def _run_pipeline_bg(queries, resume_text, pass_threshold, max_results):
+def _run_pipeline_bg(queries, resume_text, pass_threshold, max_results, target_new):
     root = logging.getLogger()
     root.addHandler(_tail_handler)
     try:
@@ -129,11 +129,31 @@ def _run_pipeline_bg(queries, resume_text, pass_threshold, max_results):
         from scraper import scrape_jobs
         from scorer import score_jobs
 
-        _pipeline["step"] = "searching"
-        run_queries(queries, max_results=max_results)
+        MAX_ROUNDS = 5
+        results_per_query = max_results
 
-        _pipeline["step"] = "scraping"
-        scrape_jobs()
+        for round_num in range(1, MAX_ROUNDS + 1):
+            suffix = f" · round {round_num}" if round_num > 1 else ""
+
+            _pipeline["step"] = f"searching{suffix}"
+            stats = run_queries(queries, max_results=results_per_query)
+
+            _pipeline["step"] = f"scraping{suffix}"
+            scrape_jobs()
+
+            with db.get_conn() as conn:
+                ready = len(db.get_pending_score(conn))
+
+            log.info(f"[pipeline] Round {round_num}: {ready}/{target_new} job(s) ready for scoring")
+
+            if ready >= target_new:
+                break
+
+            if stats["new"] == 0:
+                log.info(f"[pipeline] No new URLs in round {round_num}, stopping search early")
+                break
+
+            results_per_query = min(results_per_query * 2, 50)
 
         _pipeline["step"] = "scoring"
         score_jobs(resume_text, pass_threshold=pass_threshold)
@@ -261,6 +281,7 @@ def api_run():
 
     pass_threshold = int(os.environ.get("PASS_THRESHOLD", 70))
     max_results    = int(os.environ.get("SEARCH_RESULTS_PER_QUERY", 10))
+    target_new     = int(os.environ.get("SEARCH_TARGET_NEW", 20))
 
     _pipeline["running"] = True
     _pipeline["step"]    = "starting"
@@ -268,7 +289,7 @@ def api_run():
 
     threading.Thread(
         target=_run_pipeline_bg,
-        args=(queries, resume_text, pass_threshold, max_results),
+        args=(queries, resume_text, pass_threshold, max_results, target_new),
         daemon=True,
     ).start()
 

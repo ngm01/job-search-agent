@@ -1121,15 +1121,14 @@ async function pollPipeline() {
   const res  = await fetch('/api/run/status');
   const data = await res.json();
 
-  const stepLabels = {
-    starting:  'starting...',
-    searching: 'searching for jobs...',
-    scraping:  'scraping job pages...',
-    scoring:   'scoring against resumes...',
-    done:      'done',
-    error:     'error',
-  };
-  document.getElementById('pipeline-step').textContent = stepLabels[data.step] || data.step;
+  function stepLabel(step) {
+    if (!step) return '';
+    if (step.startsWith('searching')) return step.replace('searching', 'searching for jobs...');
+    if (step.startsWith('scraping'))  return step.replace('scraping',  'scraping job pages...');
+    const labels = { starting: 'starting...', scoring: 'scoring against resumes...', done: 'done', error: 'error' };
+    return labels[step] || step;
+  }
+  document.getElementById('pipeline-step').textContent = stepLabel(data.step);
   if (data.last_log) document.getElementById('pipeline-log').textContent = data.last_log;
 
   if (!data.running) {
