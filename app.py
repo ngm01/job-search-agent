@@ -212,6 +212,7 @@ def api_results():
             "cover_md": r["cover_letter_md"],
             "skills_table": score_data.get("skills_match", {}).get("skills_table", []),
             "missing_keywords": score_data.get("skills_match", {}).get("missing_keywords", []),
+            "scored_at": r["scored_at"],
         })
 
     return jsonify(results)

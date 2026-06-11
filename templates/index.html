@@ -624,6 +624,11 @@
     word-break: break-all;
   }
 
+  /* ── Sortable columns ── */
+  thead th[data-sort-key] { cursor: pointer; user-select: none; }
+  thead th[data-sort-key]:hover { color: var(--text); }
+  .si { color: var(--accent); margin-left: 3px; }
+
   /* ── Empty state ── */
   #empty {
     padding: 80px 32px;
@@ -784,12 +789,13 @@
   <table id="results-table" style="display:none">
     <thead>
       <tr>
-        <th>Employer / Role</th>
-        <th>Score</th>
-        <th>Fit</th>
-        <th>Result</th>
+        <th data-sort-key="employer" onclick="sortBy('employer')">Employer / Role<span class="si"></span></th>
+        <th data-sort-key="composite_score" onclick="sortBy('composite_score')">Score<span class="si"></span></th>
+        <th data-sort-key="fit_label" onclick="sortBy('fit_label')">Fit<span class="si"></span></th>
+        <th data-sort-key="pass_fail" onclick="sortBy('pass_fail')">Result<span class="si"></span></th>
         <th>Action</th>
-        <th>Source</th>
+        <th data-sort-key="scored_at" onclick="sortBy('scored_at')">Scored<span class="si"></span></th>
+        <th data-sort-key="source" onclick="sortBy('source')">Source<span class="si"></span></th>
         <th>Docs</th>
         <th>Applied</th>
       </tr>
@@ -802,7 +808,43 @@
 let allResults = [];
 let activeFilter = 'all';
 let expandedId = null;
+let _sort = { key: 'composite_score', dir: -1 };
 const _inFlight = { generate: new Set(), rescore: new Set(), delete: new Set() };
+
+function fmtDate(s) {
+  if (!s) return '—';
+  const d = new Date(s.replace(' ', 'T') + 'Z');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
+function getSortVal(r, key) {
+  if (key === 'composite_score') return r.composite_score ?? -Infinity;
+  if (key === 'fit_label') return ({ 'Strong Fit': 3, 'Moderate Fit': 2, 'Weak Fit': 1 })[r.fit_label] ?? 0;
+  if (key === 'pass_fail')  return r.pass_fail === 'PASS' ? 1 : 0;
+  if (key === 'scored_at')  return r.scored_at ?? '';
+  return (r[key] ?? '').toString().toLowerCase();
+}
+
+function sortResults(results) {
+  const { key, dir } = _sort;
+  return [...results].sort((a, b) => {
+    const av = getSortVal(a, key), bv = getSortVal(b, key);
+    if (av < bv) return dir;
+    if (av > bv) return -dir;
+    return 0;
+  });
+}
+
+function sortBy(key) {
+  _sort = _sort.key === key
+    ? { key, dir: _sort.dir * -1 }
+    : { key, dir: (key === 'composite_score' || key === 'scored_at') ? -1 : 1 };
+  document.querySelectorAll('thead th[data-sort-key]').forEach(th => {
+    const si = th.querySelector('.si');
+    if (si) si.textContent = th.dataset.sortKey === _sort.key ? (_sort.dir === 1 ? ' ↑' : ' ↓') : '';
+  });
+  applyFilter(activeFilter);
+}
 
 function scoreClass(s) {
   if (s === null || s === undefined) return '';
@@ -860,6 +902,7 @@ function renderRow(r) {
       <td>${fitBadge(r.fit_label)}</td>
       <td>${passBadge(r.pass_fail)}</td>
       <td style="font-size:12px;color:var(--subtext)">${r.recommended_action || '—'}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--subtext);white-space:nowrap">${fmtDate(r.scored_at)}</td>
       <td><span class="source-pill">${r.source || '?'}</span></td>
       <td>${docsCell(r)}</td>
       <td class="applied-cell" onclick="event.stopPropagation()">
@@ -915,7 +958,7 @@ function renderDetail(r) {
 
   return `
     <tr class="detail-row" data-detail-id="${r.id}">
-      <td colspan="8">
+      <td colspan="9">
         <div class="detail-panel">
           <div class="detail-section">
             <h4>Subscores</h4>
@@ -1065,7 +1108,7 @@ function applyFilter(filter) {
 
 function renderTable(results) {
   const tbody = document.getElementById('results-body');
-  tbody.innerHTML = results.map(renderRow).join('');
+  tbody.innerHTML = sortResults(results).map(renderRow).join('');
 
   const table = document.getElementById('results-table');
   const empty = document.getElementById('empty');

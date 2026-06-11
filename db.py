@@ -205,7 +205,7 @@ def get_all_results(conn: sqlite3.Connection) -> list[sqlite3.Row]:
             s.relevance_score, s.skills_coverage_pct,
             s.experience_score, s.experience_implied_level,
             s.impact_score, s.communication_score, s.formatting_score,
-            s.strengths, s.weaknesses, s.optimization_suggestions, s.raw_json,
+            s.strengths, s.weaknesses, s.optimization_suggestions, s.raw_json, s.scored_at,
             d.resume_md, d.resume_pdf_path, d.cover_letter_md, d.cover_letter_pdf_path
         FROM jobs j
         LEFT JOIN scores s ON s.job_id = j.id
